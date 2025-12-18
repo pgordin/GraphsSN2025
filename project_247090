@@ -1,0 +1,121 @@
+from pyamaze import maze, agent
+import heapq
+
+def astar(m):
+    # define possible movement directions
+    directions = {'N': (-1, 0), 'S': (1, 0), 'W': (0, -1), 'E': (0, 1)}
+    
+    # define start (bottom-right) and goal (top-left) positions
+    start = (m.rows, m.cols)
+    goal = (1, 1)
+
+    # define heuristic function (Manhattan distance)
+    def h(pos):
+        return abs(pos[0] - goal[0]) + abs(pos[1] - goal[1])
+
+    # return neighbours of the current cell
+    def neighbours(current):
+        nbrs = []
+        for dir_key, d in directions.items():
+            # check if there is no wall in the direction
+            if m.maze_map.get(current, {}).get(dir_key, 0) == 1:
+                nb = (current[0] + d[0], current[1] + d[1])
+                nbrs.append(nb)
+        return nbrs
+
+    parents = {} # to reconstruct path
+    found = False # flag to indicate if goal is found
+
+    # priority queue for open set
+    # each entry: (f_score, g_cost, tie_breaker, node)
+    pq = []
+    entry_count = 0
+
+    # initialize the priority queue with the start node
+    heapq.heappush(pq, (h(start), 0, entry_count, start))
+
+    # cost from start to each node
+    g_cost = {start: 0}
+    
+    # set of visited nodes (closed set)
+    visited = set()
+
+    # main A* loop
+    while pq:
+        # get the node with the lowest f_score = g_cost + h_cost
+        f_score, cost, _, current = heapq.heappop(pq)
+
+        # if goal is reached, stop
+        if current == goal:
+            found = True
+            break
+        
+        # skip if already visited
+        if current in visited:
+            continue
+
+        visited.add(current)
+
+        # explore neighbours
+        for nb in neighbours(current):
+            new_cost = cost + 1  # Uniform cost
+
+            # if lower cost is found, update
+            if nb not in g_cost or new_cost < g_cost[nb]:
+                g_cost[nb] = new_cost
+                parents[nb] = current
+                f_score = new_cost + h(nb)
+
+                entry_count += 1
+                heapq.heappush(pq, (f_score, new_cost, entry_count, nb))
+
+    # reconstruct the shortest path from start to goal
+    def reconstruct_path(parents):
+        path = []
+        current = goal
+        while current != start:
+            path.insert(0, current)
+            current = parents[current]
+        path.insert(0, start)
+        return path
+
+    if found:
+        p = reconstruct_path(parents)
+    else:
+        p = []
+
+    return p, visited
+
+# generate a maze using built-in pyamaze library
+m = maze(40, 40)
+m.CreateMaze(loopPercent=50)
+
+# load a predefined maze from CSV file as an example maze
+#m.CreateMaze(loadMaze="maze--2025-12-18--11-18-06.csv")
+
+# run A* search algorithm
+p, visited = astar(m)
+
+# visualize visited cells
+w = m._cell_width
+offset = m._LabWidth
+
+for cell in visited:
+    if cell != (m.rows, m.cols) and cell != (1, 1):  # skip start and goal
+        r, c = cell
+        x1 = (c - 1) * w + offset
+        y1 = (r - 1) * w + offset
+        x2 = x1 + w
+        y2 = y1 + w
+        m._canvas.create_rectangle(x1, y1, x2, y2, fill="#7da594", outline='', tag='visited')
+
+# draw visited cells below the maze walls
+m._canvas.tag_lower('visited')
+
+# create an agent to trace the path
+a = agent(m, shape='square', footprints=True, filled = True)
+
+# animate the solution path
+m.tracePath({a:p}, delay=100)
+
+m.run()
